@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.tracking {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .coordinates {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .coord-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .coord-item.updated {
+            border-color: #28a745;
+            background: #d4edda;
+            transform: scale(1.02);
+        }
+
+        .coord-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .coord-value {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .accuracy {
+            grid-column: span 2;
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .speed {
+            grid-column: span 2;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .map-container {
+            height: 300px;
+            background: #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        .map-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+
+        @media (max-width: 480px) {
+            .coordinates {
+                grid-template-columns: 1fr;
+            }
+            
+            .speed, .accuracy {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 GPS Tracker</h1>
+        
+        <div id="status" class="status">Click Start to begin tracking</div>
+        
+        <div class="coordinates">
+            <div class="coord-item" id="latitude">
+                <div class="coord-label">Latitude</div>
+                <div class="coord-value">--°</div>
+            </div>
+            <div class="coord-item" id="longitude">
+                <div class="coord-label">Longitude</div>
+                <div class="coord-value">--°</div>
+            </div>
+            <div class="accuracy" id="accuracy">
+                Accuracy: -- meters
+            </div>
+            <div class="speed" id="speed">
+                Speed: -- km/h
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn-start">Start Tracking</button>
+            <button id="stopBtn" class="btn-stop" disabled>Stop Tracking</button>
+        </div>
+
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="map-placeholder" id="mapPlaceholder">
+                <div>🗺️</div>
+                <div>Map will appear here</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet CSS and JS for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        class GPSTracker {
+            constructor() {
+                this.watchId = null;
+                this.map = null;
+                this.currentMarker = null;
+                this.isTracking = false;
+                
+                this.initMap();
+                this.bindEvents();
+            }
+
+            initMap() {
+                this.map = L.map('map').setView([0, 0], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(this.map);
+
+                // Hide map initially
+                this.map.getContainer().style.display = 'none';
+            }
+
+            bindEvents() {
+                document.getElementById('startBtn').addEventListener('click', () => this.startTracking());
+                document.getElementById('stopBtn').addEventListener('click', () => this.stopTracking());
+            }
+
+            async startTracking() {
+                try {
+                    this.updateStatus('Requesting location access...', 'connecting');
+                    
+                    // Check if geolocation is supported
+                    if (!navigator.geolocation) {
+                        throw new Error('Geolocation is not supported by this browser');
+                    }
+
+                    // Start watching position
+                    this.watchId = navigator.geolocation.watchPosition(
+                        (position) => this.onPositionUpdate(position),
+                        (error) => this.onPositionError(error),
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 5000
+                        }
+                    );
+
+                    this.isTracking = true;
+                    this.updateUIState(true);
+                    this.updateStatus('Tracking your location...', 'tracking');
+
+                } catch (error) {
+                    this.onPositionError(error);
+                }
+            }
+
+            stopTracking() {
+                if (this.watchId !== null) {
+                    navigator.geolocation.clearWatch(this.watchId);
+                    this.watchId = null;
+                }
+                
+                this.isTracking = false;
+                this.updateUIState(false);
+                this.updateStatus('Tracking stopped', 'error');
+                this.resetDisplay();
+            }
+
+            onPositionUpdate(position) {
+                const { latitude, longitude, accuracy } = position.coords;
+                const speed = position.coords.speed ? 
+                    (position.coords.speed * 3.6).toFixed(1) : '0.0'; // Convert m/s to km/h
+
+                // Update display
+                this.updateCoordinates(latitude, longitude, accuracy, speed);
+                
+                // Update map
+                this.updateMap(latitude, longitude);
+            }
+
+            updateCoordinates(lat, lng, accuracy, speed) {
+                document.getElementById('latitude').innerHTML = `
+                    <div class="coord-label">Latitude</div>
+                    <div class="coord-value">${lat.toFixed(6)}°</div>
+                `;
+                document.getElementById('longitude').innerHTML = `
+                    <div class="coord-label">Longitude</div>
+                    <div class="coord-value">${lng.toFixed(6)}°</div>
+                `;
+                document.getElementById('accuracy').textContent = `Accuracy: ${Math.round(accuracy)} meters`;
+                document.getElementById('speed').innerHTML = `
+                    Speed: ${speed} km/h
+                `;
+
+                // Add animation to updated coords
+                document.querySelectorAll('.coord-item').forEach(item => {
+                    item.classList.add('updated');
+                    setTimeout(() => item.classList.remove('updated'), 500);
+                });
+            }
+
+            updateMap(lat, lng) {
+                // Show map if hidden
+                if (this.map.getContainer().style.display === 'none') {
+                    this.map.getContainer().style.display = 'block';
+                    document.getElementById('mapPlaceholder').style.display = 'none';
+                }
+
+                // Update map view
+                this.map.setView([lat, lng], 16);
+
+                // Update or create marker
+                if (this.currentMarker) {
+                    this.currentMarker.setLatLng([lat, lng]);
+                } else {
+                    this.currentMarker = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker',
+                            html: '📍',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30]
+                        })
+                    }).addTo(this.map);
+                }
+            }
+
+            onPositionError(error) {
+                let message;
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        message = "Location access denied. Please enable location permissions.";
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        message = "Location information unavailable.";
+                        break;
+                    case error.TIMEOUT:
+                        message = "Location request timed out.";
+                        break;
+                    default:
+                        message = "Unknown error occurred.";
+                        break;
+                }
+                this.updateStatus(message, 'error');
+            }
+
+            updateStatus(message, type) {
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = message;
+                statusEl.className = `status ${type}`;
+            }
+
+            updateUIState(tracking) {
+                document.getElementById('startBtn').disabled = tracking;
+                document.getElementById('stopBtn').disabled = !tracking;
+            }
+
+            resetDisplay() {
+                document.getElementById('latitude').innerHTML = `
+                    <div class="coord-label">Latitude</div>
+                    <div class="coord-value">--°</div>
+                `;
+                document.getElementById('longitude').innerHTML = `
+                    <div class="coord-label">Longitude</div>
+                    <div class="coord-value">--°</div>
+                `;
+                document.getElementById('accuracy').textContent = 'Accuracy: -- meters';
+                document.getElementById('speed').innerHTML = 'Speed: -- km/h';
+                
+                this.map.getContainer().style.display = 'none';
+                document.getElementById('mapPlaceholder').style.display = 'block';
+            }
+        }
+
+        // Initialize the app when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new GPSTracker();
+        });
+    </script>
+</body>
+</html>
